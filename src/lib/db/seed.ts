@@ -4,7 +4,13 @@ import bcrypt from 'bcryptjs';
 export function seedDatabase(db: Database.Database) {
   console.log('Seeding Trinity One database...');
 
-  const passwordHash = bcrypt.hashSync('trinity123', 10);
+  const demoPassword = process.env.DEMO_PASSWORD?.trim() || 'trinity123';
+  if (demoPassword === 'trinity123') {
+    console.warn(
+      '[trinity] Seeding demo accounts with the public sample password. Set DEMO_PASSWORD and delete trinity.db before any real deployment.'
+    );
+  }
+  const passwordHash = bcrypt.hashSync(demoPassword, 10);
   const now = '2026-09-20T08:00:00Z';
 
   // 1. Institution

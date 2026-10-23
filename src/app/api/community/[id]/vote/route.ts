@@ -1,9 +1,10 @@
 import { getDb } from '@/lib/db';
 import { getCurrentUser } from '@/lib/auth';
+import { publicError } from '@/lib/security';
 
 export async function POST(
   request: Request,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
     const { user } = await getCurrentUser();
@@ -11,7 +12,7 @@ export async function POST(
       return Response.json({ error: 'Authentication required' }, { status: 401 });
     }
 
-    const postId = params.id;
+    const { id: postId } = await params;
     const db = getDb();
 
     // Check if already voted
@@ -39,7 +40,7 @@ export async function POST(
       has_voted: hasVoted,
       votes_count: voteCountRow.count,
     });
-  } catch (error: any) {
-    return Response.json({ error: error.message }, { status: 500 });
+  } catch (error: unknown) {
+    return publicError(error);
   }
 }

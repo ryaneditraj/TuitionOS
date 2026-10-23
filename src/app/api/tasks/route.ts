@@ -1,5 +1,6 @@
 import { getDb } from '@/lib/db';
 import { getCurrentUser } from '@/lib/auth';
+import { isSafeAssetUrl, publicError } from '@/lib/security';
 
 export async function GET(request: Request) {
   try {
@@ -166,8 +167,8 @@ export async function GET(request: Request) {
 
       return Response.json({ tasks });
     }
-  } catch (error: any) {
-    return Response.json({ error: error.message }, { status: 500 });
+  } catch (error: unknown) {
+    return publicError(error);
   }
 }
 
@@ -196,6 +197,15 @@ export async function POST(request: Request) {
       return Response.json({ error: 'Title, subject and due date are required' }, { status: 400 });
     }
 
+    if (attachments && (!Array.isArray(attachments) || attachments.some((item: { url?: unknown }) => item?.url && !isSafeAssetUrl(item.url)))) {
+      return Response.json({ error: 'Attachment URLs must be /uploads paths or http(s) links' }, { status: 400 });
+    }
+
+    const targetBatches = Array.isArray(batch_ids) ? batch_ids : (body.batch_id ? [body.batch_id] : []);
+    if (user.role === 'batch_admin' && targetBatches.some((id: string) => !managedBatchIds?.includes(id))) {
+      return Response.json({ error: 'You do not have permission to assign tasks to that batch' }, { status: 403 });
+    }
+
     const db = getDb();
     const taskId = `task-${Date.now()}-${Math.random().toString(36).substr(2, 6)}`;
     const now = new Date().toISOString();
@@ -222,7 +232,6 @@ export async function POST(request: Request) {
     let targetStudentList: { id: string; batch_id: string }[] = [];
 
     // Case 1: Batch assignment (Batch A, multiple batches, etc.)
-    const targetBatches = Array.isArray(batch_ids) ? batch_ids : (body.batch_id ? [body.batch_id] : []);
     if (targetBatches.length > 0) {
       const placeholders = targetBatches.map(() => '?').join(',');
       const studentsInBatches = db.prepare(`
@@ -248,7 +257,7 @@ export async function POST(request: Request) {
 
     // Default fallback if no batch or students specified: assign to default batch
     if (targetStudentList.length === 0) {
-      const defaultStudents = db.prepare('SELECT id, batch_id FROM students WHERE batch_id = "batch-12-cbse-a"').all() as any[];
+      const defaultStudents = db.prepare("SELECT id, batch_id FROM students WHERE batch_id = 'batch-12-cbse-a'").all() as any[];
       targetStudentList = defaultStudents;
     }
 
@@ -263,8 +272,8 @@ export async function POST(request: Request) {
     });
 
     return Response.json({ success: true, taskId, assignedCount: targetStudentList.length });
-  } catch (error: any) {
-    return Response.json({ error: error.message }, { status: 500 });
+  } catch (error: unknown) {
+    return publicError(error);
   }
 }
 
@@ -277,6 +286,12 @@ export async function PUT(request: Request) {
 
     const body = await request.json();
     const { assignment_id, task_id, status, submission_text, submission_file_url } = body;
+    if (!['TODO', 'IN_PROGRESS', 'COMPLETED'].includes(status)) {
+      return Response.json({ error: 'Invalid task status' }, { status: 400 });
+    }
+    if (submission_file_url && !isSafeAssetUrl(submission_file_url)) {
+      return Response.json({ error: 'Submission URL must be an /uploads path or an http(s) link' }, { status: 400 });
+    }
 
     const db = getDb();
     let assign = null;
@@ -311,7 +326,7 @@ export async function PUT(request: Request) {
     );
 
     return Response.json({ success: true, status, submitted_at });
-  } catch (error: any) {
-    return Response.json({ error: error.message }, { status: 500 });
+  } catch (error: unknown) {
+    return publicError(error);
   }
 }

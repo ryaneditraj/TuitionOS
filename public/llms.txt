@@ -1,0 +1,55 @@
+# Trinity One
+
+> Trinity One is an open-source, mobile-first operating system for tuition centres and schools. Students open one screen and see today’s classes, homework, attendance, board-exam notes, and community updates.
+
+Trinity One lives in the TuitionOS repository. It is a Next.js application with a local SQLite database for the demo and a reference PostgreSQL schema for Supabase. It is built by Ryan Editraj.
+
+## Primary sources
+
+- [Source repository](https://github.com/ryaneditraj/TuitionOS)
+- [Author on GitHub](https://github.com/ryaneditraj)
+- [Author on Instagram](https://instagram.com/ryaneditraj)
+
+## What it does
+
+- Shows a student home for today’s schedule, overdue and due-today work, the next exam, recent notes, and attendance.
+- Schedules classes with server-side checks for batch, teacher, and room overlaps.
+- Stores lecture notes, whiteboard photos, and past question papers.
+- Assigns homework to a whole batch and tracks each student’s own status.
+- Marks session attendance separately from test attendance. Students see only their own attendance.
+- Lets students post community suggestions, named or anonymous feedback, and one-tap problem reports.
+- Includes an institutional admin desk for classes, attendance rate, students, pending tasks, and exams.
+
+## Questions people ask
+
+### What is Trinity One?
+
+Trinity One is a consumer-style web app for a tuition centre or school. It replaces a cluttered ERP with a phone-first view of the school day: schedule, work, notes, exams, and announcements.
+
+### Who is Trinity One for?
+
+It is for students, faculty, batch admins, and a super admin at an institution such as Trinity Educational Institutions. The local demo includes those roles.
+
+### How do I run Trinity One?
+
+Clone https://github.com/ryaneditraj/TuitionOS, copy `.env.example` to `.env`, set `JWT_SECRET`, run `npm install`, then `npm run dev`. Open http://localhost:3000. The sample sign-in password is documented in the README and must be changed before real student data.
+
+### Does Trinity One require Supabase?
+
+No. The app you run locally uses SQLite via better-sqlite3. `supabase-schema.sql` is a reference schema for a future PostgreSQL deployment. Its row-level security policies are not complete and are not enforced by the SQLite app.
+
+### How does student attendance privacy work?
+
+The attendance API returns a student’s own records when the signed-in role is student. Class rosters are limited to faculty and admins.
+
+### Is the demo safe to put on the public internet?
+
+Not until `DEMO_MODE=false`, a new `JWT_SECRET`, and a new `DEMO_PASSWORD` are set, and the local database is reseeded. Demo mode signs the browser in as a sample student and allows persona switching without a password.
+
+### What technology does Trinity One use?
+
+Next.js (App Router), React, TypeScript, Tailwind CSS, SQLite, JWT session cookies signed with jose, and bcrypt password hashes.
+
+## Security contact
+
+Report vulnerabilities through GitHub private vulnerability reporting on https://github.com/ryaneditraj/TuitionOS. See SECURITY.md in the repository. Do not open a public issue for an unfixed security bug.

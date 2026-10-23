@@ -1,0 +1,44 @@
+name: Bug report
+description: Something in Trinity One does not behave the way it should
+title: "[Bug]: "
+labels: []
+body:
+  - type: markdown
+    attributes:
+      value: Thanks for taking the time to write this down. Leave out passwords, tokens, and student data.
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened
+      description: What did you expect, and what did you see instead?
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      placeholder: |
+        1. Sign in as the sample student
+        2. Open My Work
+        3. ...
+    validations:
+      required: true
+  - type: input
+    id: role
+    attributes:
+      label: Role you were using
+      placeholder: Student, faculty, batch admin, or super admin
+  - type: textarea
+    id: environment
+    attributes:
+      label: Environment
+      description: Browser, Node version, and whether DEMO_MODE was on.
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: Checks
+      options:
+        - label: I have searched existing issues
+          required: true
+        - label: This is not a security vulnerability (those go through Security Advisories)
+          required: true

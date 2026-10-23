@@ -1,6 +1,8 @@
 import { cookies } from 'next/headers';
+import { SESSION_COOKIE } from '@/lib/auth';
 
 export async function POST() {
-  cookies().delete('trinity_session');
+  const cookieStore = await cookies();
+  cookieStore.delete(SESSION_COOKIE);
   return Response.json({ success: true });
 }

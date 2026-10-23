@@ -381,17 +381,34 @@ ALTER TABLE community_posts ENABLE ROW LEVEL SECURITY;
 ALTER TABLE community_votes ENABLE ROW LEVEL SECURITY;
 ALTER TABLE problem_reports ENABLE ROW LEVEL SECURITY;
 
--- Helper function: get user role
+-- Helper function: get user role.
+-- search_path is pinned so a SECURITY DEFINER function cannot be tricked
+-- into reading a same-named object planted in another schema.
 CREATE OR REPLACE FUNCTION auth_user_role()
-RETURNS user_role AS $$
+RETURNS user_role
+LANGUAGE sql
+STABLE
+SECURITY DEFINER
+SET search_path = public
+AS $$
   SELECT role FROM profiles WHERE id = auth.uid();
-$$ LANGUAGE sql SECURITY DEFINER;
+$$;
 
 -- Helper function: get student batch_id
 CREATE OR REPLACE FUNCTION auth_student_batch()
-RETURNS UUID AS $$
+RETURNS UUID
+LANGUAGE sql
+STABLE
+SECURITY DEFINER
+SET search_path = public
+AS $$
   SELECT batch_id FROM students WHERE user_id = auth.uid();
-$$ LANGUAGE sql SECURITY DEFINER;
+$$;
+
+-- The running app uses local SQLite and does not apply this file.
+-- RLS is enabled below, but policies are only written for a subset of tables.
+-- Tables with RLS and no policy are default-deny for the anon and authenticated
+-- roles. Do not treat this schema as a complete production security model.
 
 -- 1. Profiles: Users can read own profile; Admins can read all
 CREATE POLICY "Users can view own profile" ON profiles

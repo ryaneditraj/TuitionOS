@@ -1,11 +1,20 @@
 import { SignJWT, jwtVerify } from 'jose';
 import { cookies } from 'next/headers';
-import bcrypt from 'bcryptjs';
 import { getDb } from './db';
+import { getJwtSecret, isDemoMode, warnIfDemoModeIsPublic } from './security';
 import { User, StudentProfile, TeacherProfile } from './types';
 
-const JWT_SECRET = new TextEncoder().encode(process.env.JWT_SECRET || 'trinity-one-super-secret-key-2026-tei');
-const COOKIE_NAME = 'trinity_session';
+export const SESSION_COOKIE = 'trinity_session';
+
+export function sessionCookieOptions() {
+  return {
+    httpOnly: true,
+    secure: process.env.NODE_ENV === 'production',
+    sameSite: 'lax' as const,
+    path: '/',
+    maxAge: 60 * 60 * 24 * 7,
+  };
+}
 
 export interface SessionPayload {
   userId: string;
@@ -18,12 +27,12 @@ export async function createSessionToken(payload: SessionPayload): Promise<strin
     .setProtectedHeader({ alg: 'HS256' })
     .setIssuedAt()
     .setExpirationTime('7d')
-    .sign(JWT_SECRET);
+    .sign(getJwtSecret());
 }
 
 export async function verifySessionToken(token: string): Promise<SessionPayload | null> {
   try {
-    const { payload } = await jwtVerify(token, JWT_SECRET);
+    const { payload } = await jwtVerify(token, getJwtSecret());
     return payload as unknown as SessionPayload;
   } catch {
     return null;
@@ -31,8 +40,8 @@ export async function verifySessionToken(token: string): Promise<SessionPayload 
 }
 
 export async function getSession(): Promise<SessionPayload | null> {
-  const cookieStore = cookies();
-  const token = cookieStore.get(COOKIE_NAME)?.value;
+  const cookieStore = await cookies();
+  const token = cookieStore.get(SESSION_COOKIE)?.value;
   if (!token) return null;
   return await verifySessionToken(token);
 }
@@ -45,15 +54,19 @@ export async function getCurrentUser(): Promise<{
 }> {
   const session = await getSession();
   if (!session?.userId) {
-    // Default to Ryan (student) if no cookie set so app opens immediately ready to test
-    return getDefaultDemoUser('user-ryan');
+    if (isDemoMode()) {
+      warnIfDemoModeIsPublic();
+      return getDefaultDemoUser('user-ryan');
+    }
+    return { user: null };
   }
 
   const db = getDb();
   const user = db.prepare('SELECT id, email, full_name, role, avatar_url, phone, created_at FROM users WHERE id = ?').get(session.userId) as User | undefined;
 
   if (!user) {
-    return getDefaultDemoUser('user-ryan');
+    if (isDemoMode()) return getDefaultDemoUser('user-ryan');
+    return { user: null };
   }
 
   return hydrateUserData(db, user);

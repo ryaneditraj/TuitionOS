@@ -1,5 +1,6 @@
 import { getDb } from '@/lib/db';
 import { getCurrentUser } from '@/lib/auth';
+import { publicError } from '@/lib/security';
 
 export async function GET(request: Request) {
   try {
@@ -29,8 +30,8 @@ export async function GET(request: Request) {
     const announcements = db.prepare(query).all(...params);
 
     return Response.json({ announcements });
-  } catch (error: any) {
-    return Response.json({ error: error.message }, { status: 500 });
+  } catch (error: unknown) {
+    return publicError(error);
   }
 }
 
@@ -69,7 +70,7 @@ export async function POST(request: Request) {
     );
 
     return Response.json({ success: true, id });
-  } catch (error: any) {
-    return Response.json({ error: error.message }, { status: 500 });
+  } catch (error: unknown) {
+    return publicError(error);
   }
 }

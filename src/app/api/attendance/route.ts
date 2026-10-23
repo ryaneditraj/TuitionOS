@@ -1,5 +1,6 @@
 import { getDb } from '@/lib/db';
 import { getCurrentUser } from '@/lib/auth';
+import { publicError } from '@/lib/security';
 
 export async function GET(request: Request) {
   try {
@@ -122,8 +123,8 @@ export async function GET(request: Request) {
         excused: studentsAttendance.filter(s => s.status === 'EXCUSED').length,
       },
     });
-  } catch (error: any) {
-    return Response.json({ error: error.message }, { status: 500 });
+  } catch (error: unknown) {
+    return publicError(error);
   }
 }
 
@@ -139,6 +140,11 @@ export async function POST(request: Request) {
 
     if (!session_id || !Array.isArray(records)) {
       return Response.json({ error: 'Session ID and student records array required' }, { status: 400 });
+    }
+
+    const allowed = new Set(['PRESENT', 'ABSENT', 'LATE', 'EXCUSED']);
+    if (records.some((rec) => !rec || !allowed.has(rec.status))) {
+      return Response.json({ error: 'Each record needs a valid attendance status' }, { status: 400 });
     }
 
     const db = getDb();
@@ -174,7 +180,7 @@ export async function POST(request: Request) {
     updateMany(records);
 
     return Response.json({ success: true, count: records.length });
-  } catch (error: any) {
-    return Response.json({ error: error.message }, { status: 500 });
+  } catch (error: unknown) {
+    return publicError(error);
   }
 }

@@ -1,4 +1,5 @@
 import { getDb } from '@/lib/db';
+import { publicError } from '@/lib/security';
 
 export async function GET() {
   try {
@@ -18,7 +19,7 @@ export async function GET() {
     const subjects = db.prepare('SELECT * FROM subjects ORDER BY name ASC').all();
     const rooms = db.prepare('SELECT * FROM rooms ORDER BY name ASC').all();
     const teachers = db.prepare(`
-      SELECT t.id, t.title, t.specialization, u.full_name, u.avatar_url, u.email
+      SELECT t.id, t.title, t.specialization, u.full_name, u.avatar_url
       FROM teachers t
       JOIN users u ON t.user_id = u.id
       ORDER BY u.full_name ASC
@@ -32,7 +33,7 @@ export async function GET() {
       rooms,
       teachers,
     });
-  } catch (error: any) {
-    return Response.json({ error: error.message }, { status: 500 });
+  } catch (error: unknown) {
+    return publicError(error);
   }
 }

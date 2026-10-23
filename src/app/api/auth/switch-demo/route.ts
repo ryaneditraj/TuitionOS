@@ -1,13 +1,22 @@
 import { cookies } from 'next/headers';
 import { getDb } from '@/lib/db';
-import { createSessionToken } from '@/lib/auth';
+import { createSessionToken, SESSION_COOKIE, sessionCookieOptions } from '@/lib/auth';
+import { isDemoMode, publicError } from '@/lib/security';
 import { User } from '@/lib/types';
 
 export async function POST(request: Request) {
   try {
-    const { userId } = await request.json();
-    const db = getDb();
+    if (!isDemoMode()) {
+      return Response.json({ error: 'Demo persona switching is disabled' }, { status: 403 });
+    }
 
+    const body = await request.json();
+    const userId = typeof body?.userId === 'string' ? body.userId : '';
+    if (!userId) {
+      return Response.json({ error: 'User id is required' }, { status: 400 });
+    }
+
+    const db = getDb();
     const user = db.prepare('SELECT id, email, full_name, role FROM users WHERE id = ?').get(userId) as User | undefined;
     if (!user) {
       return Response.json({ error: 'User not found' }, { status: 404 });
@@ -19,19 +28,14 @@ export async function POST(request: Request) {
       email: user.email,
     });
 
-    cookies().set('trinity_session', token, {
-      httpOnly: true,
-      secure: process.env.NODE_ENV === 'production',
-      sameSite: 'lax',
-      path: '/',
-      maxAge: 60 * 60 * 24 * 7,
-    });
+    const cookieStore = await cookies();
+    cookieStore.set(SESSION_COOKIE, token, sessionCookieOptions());
 
     return Response.json({
       success: true,
       user,
     });
-  } catch (error: any) {
-    return Response.json({ error: error.message }, { status: 500 });
+  } catch (error: unknown) {
+    return publicError(error);
   }
 }
