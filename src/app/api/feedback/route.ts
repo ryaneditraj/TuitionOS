@@ -1,13 +1,16 @@
 import { getDb } from '@/lib/db';
 import { getCurrentUser } from '@/lib/auth';
+import { isStaffRole, publicError } from '@/lib/security';
 
 export async function GET() {
   try {
     const { user, student } = await getCurrentUser();
     const db = getDb();
 
-    if (user?.role === 'student' && student) {
-      // Students only view their own feedback submissions (anonymous submissions hide user name)
+    if (user?.role === 'student') {
+      if (!student) {
+        return Response.json({ error: 'Student profile not found' }, { status: 404 });
+      }
       const list = db.prepare(`
         SELECT f.*, 
                CASE WHEN f.is_anonymous = 1 THEN 'Anonymous Student' ELSE u.full_name END as author_display_name
@@ -18,10 +21,13 @@ export async function GET() {
         ORDER BY f.created_at DESC
       `).all(student.id);
 
-      return Response.json({ feedback: list });
+      return Response.json({ feedback: list.map(hideAnonymousIdentity) });
     }
 
-    // Admins and teachers can view feedback (anonymous feedback strips identity)
+    if (!user || !isStaffRole(user.role)) {
+      return Response.json({ error: 'Unauthorized' }, { status: 403 });
+    }
+
     const list = db.prepare(`
       SELECT f.*,
              CASE WHEN f.is_anonymous = 1 THEN 'Anonymous Student (Identity Protected)' ELSE u.full_name END as author_display_name,
@@ -33,10 +39,15 @@ export async function GET() {
       ORDER BY f.created_at DESC
     `).all();
 
-    return Response.json({ feedback: list });
-  } catch (error: any) {
-    return Response.json({ error: error.message }, { status: 500 });
+    return Response.json({ feedback: list.map(hideAnonymousIdentity) });
+  } catch (error: unknown) {
+    return publicError(error);
   }
+}
+
+function hideAnonymousIdentity(row: any) {
+  if (!row?.is_anonymous) return row;
+  return { ...row, student_id: null, is_anonymous: true };
 }
 
 export async function POST(request: Request) {
@@ -70,8 +81,8 @@ export async function POST(request: Request) {
     );
 
     return Response.json({ success: true, id });
-  } catch (error: any) {
-    return Response.json({ error: error.message }, { status: 500 });
+  } catch (error: unknown) {
+    return publicError(error);
   }
 }
 
@@ -101,7 +112,7 @@ export async function PUT(request: Request) {
     `).run(status || null, admin_reply || null, now, id);
 
     return Response.json({ success: true });
-  } catch (error: any) {
-    return Response.json({ error: error.message }, { status: 500 });
+  } catch (error: unknown) {
+    return publicError(error);
   }
 }

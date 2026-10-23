@@ -1,25 +1,32 @@
-import { cookies } from 'next/headers';
 import bcrypt from 'bcryptjs';
+import { cookies } from 'next/headers';
 import { getDb } from '@/lib/db';
-import { createSessionToken } from '@/lib/auth';
+import { createSessionToken, SESSION_COOKIE, sessionCookieOptions } from '@/lib/auth';
+import { clientAddress, publicError, rateLimit } from '@/lib/security';
 import { User } from '@/lib/types';
+
+const DUMMY_HASH = bcrypt.hashSync('trinity-one-timing-pad', 10);
 
 export async function POST(request: Request) {
   try {
-    const { email, password } = await request.json();
+    const body = await request.json();
+    const email = typeof body?.email === 'string' ? body.email : '';
+    const password = typeof body?.password === 'string' ? body.password : '';
     if (!email || !password) {
       return Response.json({ error: 'Email and password are required' }, { status: 400 });
     }
 
-    const db = getDb();
-    const user = db.prepare('SELECT * FROM users WHERE LOWER(email) = LOWER(?)').get(email) as (User & { password_hash: string }) | undefined;
-
-    if (!user) {
-      return Response.json({ error: 'Invalid email or password' }, { status: 401 });
+    const limitKey = `${clientAddress(request)}:${email.toLowerCase()}`;
+    if (!rateLimit(`login:${limitKey}`, 8, 10 * 60 * 1000)) {
+      return Response.json({ error: 'Too many sign-in attempts. Try again in a few minutes.' }, { status: 429 });
     }
 
-    const isValid = bcrypt.compareSync(password, user.password_hash);
-    if (!isValid) {
+    const db = getDb();
+    const user = db.prepare('SELECT id, email, full_name, role, avatar_url, password_hash FROM users WHERE LOWER(email) = LOWER(?)').get(email) as (User & { password_hash: string }) | undefined;
+
+    const hash = user?.password_hash || DUMMY_HASH;
+    const isValid = bcrypt.compareSync(password, hash);
+    if (!user || !isValid) {
       return Response.json({ error: 'Invalid email or password' }, { status: 401 });
     }
 
@@ -29,13 +36,8 @@ export async function POST(request: Request) {
       email: user.email,
     });
 
-    cookies().set('trinity_session', token, {
-      httpOnly: true,
-      secure: process.env.NODE_ENV === 'production',
-      sameSite: 'lax',
-      path: '/',
-      maxAge: 60 * 60 * 24 * 7, // 7 days
-    });
+    const cookieStore = await cookies();
+    cookieStore.set(SESSION_COOKIE, token, sessionCookieOptions());
 
     return Response.json({
       success: true,
@@ -47,7 +49,7 @@ export async function POST(request: Request) {
         avatar_url: user.avatar_url,
       },
     });
-  } catch (error: any) {
-    return Response.json({ error: error.message }, { status: 500 });
+  } catch (error: unknown) {
+    return publicError(error);
   }
 }

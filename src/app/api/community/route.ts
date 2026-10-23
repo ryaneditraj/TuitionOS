@@ -1,5 +1,6 @@
 import { getDb } from '@/lib/db';
 import { getCurrentUser } from '@/lib/auth';
+import { publicError } from '@/lib/security';
 
 export async function GET(request: Request) {
   try {
@@ -10,7 +11,7 @@ export async function GET(request: Request) {
     let query = `
       SELECT cp.*,
              CASE WHEN cp.is_anonymous = 1 THEN 'Anonymous Student' ELSE u.full_name END as author_name,
-             u.avatar_url as author_avatar,
+             CASE WHEN cp.is_anonymous = 1 THEN NULL ELSE u.avatar_url END as author_avatar,
              ru.full_name as responded_by_name,
              (SELECT count(*) FROM community_votes cv WHERE cv.post_id = cp.id) as votes_count
       FROM community_posts cp
@@ -33,17 +34,21 @@ export async function GET(request: Request) {
         const v = db.prepare('SELECT 1 FROM community_votes WHERE post_id = ? AND user_id = ?').get(p.id, user.id);
         hasVoted = !!v;
       }
+      const anonymous = Boolean(p.is_anonymous);
       return {
         ...p,
-        is_anonymous: Boolean(p.is_anonymous),
+        author_id: anonymous ? null : p.author_id,
+        author_avatar: anonymous ? null : p.author_avatar,
+        author_name: anonymous ? 'Anonymous Student' : p.author_name,
+        is_anonymous: anonymous,
         votes_count: p.votes_count || 0,
         has_voted: hasVoted,
       };
     });
 
     return Response.json({ posts });
-  } catch (error: any) {
-    return Response.json({ error: error.message }, { status: 500 });
+  } catch (error: unknown) {
+    return publicError(error);
   }
 }
 
@@ -65,26 +70,30 @@ export async function POST(request: Request) {
     const id = `cp-${Date.now()}-${Math.random().toString(36).substr(2, 6)}`;
     const now = new Date().toISOString();
 
+    const anonymous = Boolean(is_anonymous);
     db.prepare(`
       INSERT INTO community_posts (
         id, author_id, is_anonymous, title, description, category, status, created_at
       ) VALUES (?, ?, ?, ?, ?, ?, 'OPEN', ?)
     `).run(
       id,
-      user.id,
-      is_anonymous ? 1 : 0,
+      anonymous ? null : user.id,
+      anonymous ? 1 : 0,
       title,
       description,
       category || 'General Idea',
       now
     );
 
-    // Initial vote by the author
-    db.prepare(`INSERT OR IGNORE INTO community_votes (post_id, user_id, created_at) VALUES (?, ?, ?)`).run(id, user.id, now);
+    // A named author starts with their own vote. Anonymous posts skip that
+    // vote so the votes table does not point back at the author.
+    if (!anonymous) {
+      db.prepare(`INSERT OR IGNORE INTO community_votes (post_id, user_id, created_at) VALUES (?, ?, ?)`).run(id, user.id, now);
+    }
 
     return Response.json({ success: true, id });
-  } catch (error: any) {
-    return Response.json({ error: error.message }, { status: 500 });
+  } catch (error: unknown) {
+    return publicError(error);
   }
 }
 
@@ -123,7 +132,7 @@ export async function PUT(request: Request) {
     );
 
     return Response.json({ success: true });
-  } catch (error: any) {
-    return Response.json({ error: error.message }, { status: 500 });
+  } catch (error: unknown) {
+    return publicError(error);
   }
 }

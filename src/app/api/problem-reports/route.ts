@@ -1,12 +1,16 @@
 import { getDb } from '@/lib/db';
 import { getCurrentUser } from '@/lib/auth';
+import { isStaffRole, publicError } from '@/lib/security';
 
 export async function GET() {
   try {
     const { user, student } = await getCurrentUser();
     const db = getDb();
 
-    if (user?.role === 'student' && student) {
+    if (user?.role === 'student') {
+      if (!student) {
+        return Response.json({ error: 'Student profile not found' }, { status: 404 });
+      }
       const reports = db.prepare(`
         SELECT pr.*, s.topic as session_topic, s.date as session_date
         FROM problem_reports pr
@@ -16,6 +20,10 @@ export async function GET() {
       `).all(student.id);
 
       return Response.json({ reports });
+    }
+
+    if (!user || !isStaffRole(user.role)) {
+      return Response.json({ error: 'Unauthorized' }, { status: 403 });
     }
 
     const reports = db.prepare(`
@@ -28,8 +36,8 @@ export async function GET() {
     `).all();
 
     return Response.json({ reports });
-  } catch (error: any) {
-    return Response.json({ error: error.message }, { status: 500 });
+  } catch (error: unknown) {
+    return publicError(error);
   }
 }
 
@@ -61,8 +69,8 @@ export async function POST(request: Request) {
     );
 
     return Response.json({ success: true, id });
-  } catch (error: any) {
-    return Response.json({ error: error.message }, { status: 500 });
+  } catch (error: unknown) {
+    return publicError(error);
   }
 }
 
@@ -87,7 +95,7 @@ export async function PUT(request: Request) {
     `).run(status || null, resolution_notes || null, id);
 
     return Response.json({ success: true });
-  } catch (error: any) {
-    return Response.json({ error: error.message }, { status: 500 });
+  } catch (error: unknown) {
+    return publicError(error);
   }
 }

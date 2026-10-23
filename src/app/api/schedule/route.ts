@@ -1,5 +1,6 @@
 import { getDb } from '@/lib/db';
 import { getCurrentUser } from '@/lib/auth';
+import { publicError } from '@/lib/security';
 
 export async function GET(request: Request) {
   try {
@@ -112,8 +113,8 @@ export async function GET(request: Request) {
     });
 
     return Response.json({ sessions });
-  } catch (error: any) {
-    return Response.json({ error: error.message }, { status: 500 });
+  } catch (error: unknown) {
+    return publicError(error);
   }
 }
 
@@ -142,6 +143,20 @@ export async function POST(request: Request) {
 
     if (!batch_id || !date || !start_time || !end_time || !session_type) {
       return Response.json({ error: 'Missing required scheduling fields' }, { status: 400 });
+    }
+
+    const sessionTypes = new Set(['CLASS', 'PRACTICE', 'STUDY', 'EXAM', 'EVENT', 'HOLIDAY', 'IDLE']);
+    if (!sessionTypes.has(session_type)) {
+      return Response.json({ error: 'Invalid session type' }, { status: 400 });
+    }
+
+    if (recurring_until) {
+      const start = new Date(`${date}T00:00:00Z`);
+      const until = new Date(`${recurring_until}T00:00:00Z`);
+      const spanDays = Math.round((until.getTime() - start.getTime()) / 86400000);
+      if (Number.isNaN(spanDays) || spanDays < 0 || spanDays > 370) {
+        return Response.json({ error: 'Recurring end date must be within 370 days of the start date' }, { status: 400 });
+      }
     }
 
     if (user.role === 'batch_admin' && !managedBatchIds?.includes(batch_id)) {
@@ -243,8 +258,8 @@ export async function POST(request: Request) {
     }
 
     return Response.json({ success: true, id, generatedCount });
-  } catch (error: any) {
-    return Response.json({ error: error.message }, { status: 500 });
+  } catch (error: unknown) {
+    return publicError(error);
   }
 }
 
@@ -314,8 +329,8 @@ export async function PUT(request: Request) {
     );
 
     return Response.json({ success: true });
-  } catch (error: any) {
-    return Response.json({ error: error.message }, { status: 500 });
+  } catch (error: unknown) {
+    return publicError(error);
   }
 }
 
@@ -338,8 +353,8 @@ export async function DELETE(request: Request) {
 
     db.prepare('DELETE FROM schedule_sessions WHERE id = ?').run(id);
     return Response.json({ success: true });
-  } catch (error: any) {
-    return Response.json({ error: error.message }, { status: 500 });
+  } catch (error: unknown) {
+    return publicError(error);
   }
 }
 

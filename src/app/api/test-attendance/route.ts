@@ -1,5 +1,6 @@
 import { getDb } from '@/lib/db';
 import { getCurrentUser } from '@/lib/auth';
+import { isStaffRole, publicError } from '@/lib/security';
 
 export async function GET(request: Request) {
   try {
@@ -9,7 +10,10 @@ export async function GET(request: Request) {
     const { user, student } = await getCurrentUser();
     const db = getDb();
 
-    if (user?.role === 'student' && student) {
+    if (user?.role === 'student') {
+      if (!student) {
+        return Response.json({ error: 'Student profile not found' }, { status: 404 });
+      }
       // Students only view their own test attendance and marks
       const myRecord = examId ? db.prepare(`
         SELECT ta.*, e.title as exam_title, e.date as exam_date, e.max_marks
@@ -29,6 +33,10 @@ export async function GET(request: Request) {
       `).all(student.id);
 
       return Response.json({ myRecord, tests: allMyTests });
+    }
+
+    if (!user || !isStaffRole(user.role)) {
+      return Response.json({ error: 'Unauthorized' }, { status: 403 });
     }
 
     if (!examId) {
@@ -76,8 +84,8 @@ export async function GET(request: Request) {
     });
 
     return Response.json({ exam, students: result });
-  } catch (error: any) {
-    return Response.json({ error: error.message }, { status: 500 });
+  } catch (error: unknown) {
+    return publicError(error);
   }
 }
 
@@ -93,6 +101,11 @@ export async function POST(request: Request) {
 
     if (!exam_id || !Array.isArray(records)) {
       return Response.json({ error: 'Exam ID and records array required' }, { status: 400 });
+    }
+
+    const allowed = new Set(['PRESENT', 'ABSENT', 'LATE', 'EXCUSED']);
+    if (records.some((rec) => !rec || !allowed.has(rec.status))) {
+      return Response.json({ error: 'Each record needs a valid attendance status' }, { status: 400 });
     }
 
     const db = getDb();
@@ -128,7 +141,7 @@ export async function POST(request: Request) {
     updateMany(records);
 
     return Response.json({ success: true, count: records.length });
-  } catch (error: any) {
-    return Response.json({ error: error.message }, { status: 500 });
+  } catch (error: unknown) {
+    return publicError(error);
   }
 }

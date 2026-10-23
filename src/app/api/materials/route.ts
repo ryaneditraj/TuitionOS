@@ -1,5 +1,6 @@
 import { getDb } from '@/lib/db';
 import { getCurrentUser } from '@/lib/auth';
+import { isSafeAssetUrl, publicError } from '@/lib/security';
 
 export async function GET(request: Request) {
   try {
@@ -45,8 +46,8 @@ export async function GET(request: Request) {
     const materials = db.prepare(query).all(...params) as any[];
 
     return Response.json({ materials });
-  } catch (error: any) {
-    return Response.json({ error: error.message }, { status: 500 });
+  } catch (error: unknown) {
+    return publicError(error);
   }
 }
 
@@ -62,6 +63,9 @@ export async function POST(request: Request) {
 
     if (!batch_id || !subject_id || !title || !file_url) {
       return Response.json({ error: 'Missing required material fields' }, { status: 400 });
+    }
+    if (!isSafeAssetUrl(file_url)) {
+      return Response.json({ error: 'File URL must be an /uploads path or an http(s) link' }, { status: 400 });
     }
 
     const db = getDb();
@@ -88,7 +92,7 @@ export async function POST(request: Request) {
     );
 
     return Response.json({ success: true, id });
-  } catch (error: any) {
-    return Response.json({ error: error.message }, { status: 500 });
+  } catch (error: unknown) {
+    return publicError(error);
   }
 }

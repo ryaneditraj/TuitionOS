@@ -1,5 +1,6 @@
 import { getDb } from '@/lib/db';
 import { getCurrentUser } from '@/lib/auth';
+import { isSafeAssetUrl, publicError } from '@/lib/security';
 
 export async function GET() {
   try {
@@ -12,8 +13,8 @@ export async function GET() {
     }));
 
     return Response.json({ events: parsedEvents });
-  } catch (error: any) {
-    return Response.json({ error: error.message }, { status: 500 });
+  } catch (error: unknown) {
+    return publicError(error);
   }
 }
 
@@ -29,6 +30,9 @@ export async function POST(request: Request) {
 
     if (!title || !description || !date) {
       return Response.json({ error: 'Missing required event fields' }, { status: 400 });
+    }
+    if (photos && (!Array.isArray(photos) || photos.some((url: unknown) => !isSafeAssetUrl(url)))) {
+      return Response.json({ error: 'Event photo URLs must be /uploads paths or http(s) links' }, { status: 400 });
     }
 
     const db = getDb();
@@ -53,7 +57,7 @@ export async function POST(request: Request) {
     );
 
     return Response.json({ success: true, id });
-  } catch (error: any) {
-    return Response.json({ error: error.message }, { status: 500 });
+  } catch (error: unknown) {
+    return publicError(error);
   }
 }

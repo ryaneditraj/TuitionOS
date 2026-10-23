@@ -1,5 +1,6 @@
 import { getDb } from '@/lib/db';
 import { getCurrentUser } from '@/lib/auth';
+import { isSafeAssetUrl, publicError } from '@/lib/security';
 
 export async function GET(request: Request) {
   try {
@@ -34,8 +35,8 @@ export async function GET(request: Request) {
     const papers = db.prepare(query).all(...params) as any[];
 
     return Response.json({ papers });
-  } catch (error: any) {
-    return Response.json({ error: error.message }, { status: 500 });
+  } catch (error: unknown) {
+    return publicError(error);
   }
 }
 
@@ -51,6 +52,9 @@ export async function POST(request: Request) {
 
     if (!title || !year || !subject_id || !file_url) {
       return Response.json({ error: 'Missing required question paper fields' }, { status: 400 });
+    }
+    if (!isSafeAssetUrl(file_url) || (solution_url && !isSafeAssetUrl(solution_url))) {
+      return Response.json({ error: 'Paper URLs must be /uploads paths or http(s) links' }, { status: 400 });
     }
 
     const db = getDb();
@@ -74,7 +78,7 @@ export async function POST(request: Request) {
     );
 
     return Response.json({ success: true, id });
-  } catch (error: any) {
-    return Response.json({ error: error.message }, { status: 500 });
+  } catch (error: unknown) {
+    return publicError(error);
   }
 }

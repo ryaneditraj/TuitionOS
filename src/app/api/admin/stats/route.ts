@@ -1,5 +1,6 @@
 import { getDb } from '@/lib/db';
 import { getCurrentUser } from '@/lib/auth';
+import { publicError } from '@/lib/security';
 
 export async function GET() {
   try {
@@ -16,8 +17,8 @@ export async function GET() {
     const batchesCount = (db.prepare('SELECT count(*) as c FROM batches').get() as any).c;
     const todayClassesCount = (db.prepare('SELECT count(*) as c FROM schedule_sessions WHERE date = ?').get(today) as any).c;
     const upcomingExamsCount = (db.prepare('SELECT count(*) as c FROM exams WHERE date >= ?').get(today) as any).c;
-    const pendingTasksCount = (db.prepare('SELECT count(*) as c FROM task_assignments WHERE status != "COMPLETED"').get() as any).c;
-    const feedbackCount = (db.prepare('SELECT count(*) as c FROM feedback WHERE status = "Received"').get() as any).c;
+    const pendingTasksCount = (db.prepare("SELECT count(*) as c FROM task_assignments WHERE status != 'COMPLETED'").get() as any).c;
+    const feedbackCount = (db.prepare("SELECT count(*) as c FROM feedback WHERE status = 'Received'").get() as any).c;
 
     const attRow = db.prepare(`
       SELECT 
@@ -52,7 +53,7 @@ export async function GET() {
       recentAnnouncements,
       recentFeedback,
     });
-  } catch (error: any) {
-    return Response.json({ error: error.message }, { status: 500 });
+  } catch (error: unknown) {
+    return publicError(error);
   }
 }
